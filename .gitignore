@@ -154,3 +154,10 @@ gradle-app.setting
 .DS_Store
 Thumbs.db
 android/libs/
+
+## Test Data
+/data/
+/cache/
+/bots/
+/libs/
+

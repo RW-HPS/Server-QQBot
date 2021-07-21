@@ -1,0 +1,8 @@
+{
+  "name": "Server-QQBot",
+  "author": "Minxyzgo",
+  "main": "com.github.minxyzgo.rwserver.plugins.qqbot.QQBotPlugin",
+  "description": "基于Mirai的，运行于RW-HPS并实现功能的机器人",
+  "version": "0.0.1",
+  "supportedVersions": "\u003e\u003d 1.3.0"
+}
