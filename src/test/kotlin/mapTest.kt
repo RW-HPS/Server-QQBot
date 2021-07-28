@@ -1,5 +1,5 @@
-import com.github.minxyzgo.rwserver.plugins.qqbot.util.parseMapType
-import java.io.File
+import com.github.minxyzgo.rwserver.plugins.qqbot.util.*
+import java.io.*
 
 fun main() {
     for(fi in File(".").listFiles()) {

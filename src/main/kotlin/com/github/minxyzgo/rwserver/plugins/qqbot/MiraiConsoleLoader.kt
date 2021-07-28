@@ -1,18 +1,16 @@
 package com.github.minxyzgo.rwserver.plugins.qqbot
 
-import com.github.dr.rwserver.data.global.Data
-import com.github.dr.rwserver.util.log.Log
-import com.github.minxyzgo.rwserver.plugins.qqbot.core.MiraiPlugin
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import net.mamoe.mirai.console.ConsoleFrontEndImplementation
+import com.github.dr.rwserver.data.global.*
+import com.github.dr.rwserver.util.log.*
+import com.github.minxyzgo.rwserver.plugins.qqbot.core.*
+import kotlinx.coroutines.*
+import net.mamoe.mirai.console.*
 import net.mamoe.mirai.console.MiraiConsoleImplementation.Companion.start
 import net.mamoe.mirai.console.command.*
-import net.mamoe.mirai.console.command.descriptor.ExperimentalCommandDescriptors
-import net.mamoe.mirai.console.terminal.MiraiConsoleImplementationTerminal
-import net.mamoe.mirai.console.util.ConsoleExperimentalApi
-import net.mamoe.mirai.utils.MiraiLogger
-import net.mamoe.mirai.utils.SimpleLogger
+import net.mamoe.mirai.console.command.descriptor.*
+import net.mamoe.mirai.console.terminal.*
+import net.mamoe.mirai.console.util.*
+import net.mamoe.mirai.utils.*
 
 @ConsoleExperimentalApi
 @ExperimentalCommandDescriptors
@@ -86,8 +84,8 @@ object MiraiConsoleLoader : MiraiConsoleImplementationTerminal() {
                             consoleLogger.warning (
                                 """
                                     参数不匹配, 你是否想执行:
-                                    ${result.command}
-                                    ${result.call}
+                                    ${result.command.primaryName}
+                                    ${result.call.calleeName}
                                 """
                             )
                         }

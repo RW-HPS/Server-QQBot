@@ -1,24 +1,19 @@
 package com.github.minxyzgo.rwserver.plugins.qqbot.util
 
-import com.github.dr.rwserver.data.global.Data
-import com.github.dr.rwserver.game.GameMaps
-import com.github.dr.rwserver.util.Time
-import com.github.dr.rwserver.util.file.FileUtil
-import com.github.dr.rwserver.util.zip.zip.ZipDecoder
-import com.github.minxyzgo.rwserver.plugins.qqbot.QQBotPlugin
-import net.mamoe.mirai.console.command.descriptor.ExperimentalCommandDescriptors
-import net.mamoe.mirai.console.util.ConsoleExperimentalApi
-import net.mamoe.mirai.contact.Group
-import net.mamoe.mirai.utils.RemoteFile
-import org.w3c.dom.Element
-import org.w3c.dom.Node
-import org.w3c.dom.NodeList
-import java.io.BufferedOutputStream
-import java.io.FileOutputStream
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import javax.xml.parsers.DocumentBuilderFactory
+import com.github.dr.rwserver.data.global.*
+import com.github.dr.rwserver.game.*
+import com.github.dr.rwserver.util.*
+import com.github.dr.rwserver.util.file.*
+import com.github.dr.rwserver.util.zip.zip.*
+import com.github.minxyzgo.rwserver.plugins.qqbot.*
+import net.mamoe.mirai.console.command.descriptor.*
+import net.mamoe.mirai.console.util.*
+import net.mamoe.mirai.contact.*
+import net.mamoe.mirai.utils.*
+import org.w3c.dom.*
+import java.io.*
+import java.net.*
+import javax.xml.parsers.*
 
 /**
  *@return 返回插件运行时间。以毫秒为单位。
@@ -35,12 +30,14 @@ fun operationTime() = Time.millis() - QQBotPlugin.startTime
  */
 fun getMapFileInputStreamBySuffix(mapName: String, suffix: String): InputStream? {
     val mapData = Data.game.mapsData[mapName]
-    val fileUtil = FileUtil.file(Data.Plugin_Maps_Path)
+    val fileUtil = FileUtil.toFolder(Data.Plugin_Maps_Path)
 
     return mapData.run {
         when (mapData.mapFileType) {
             GameMaps.MapFileType.file -> fileUtil.toPath(mapFileName + suffix).file.run { if(exists() && !isDirectory) inputStream() else null }
-            GameMaps.MapFileType.zip -> ZipDecoder(fileUtil.toPath(zipFileName).toPath(mapFileName + suffix).file.apply { if(!exists() || isDirectory) return@run null }).stream
+            GameMaps.MapFileType.zip -> ZipDecoder(
+                fileUtil.toPath(zipFileName!!).file
+            ).getZipNameInputStream(mapFileName + suffix)
             else -> throw UnsupportedOperationException("Unsupported web file")
         }
     }
@@ -90,7 +87,6 @@ fun parseMapType(xmlInput: InputStream): String? {
                     val properties = obj.getElementsByTagName("properties")
                     val base = properties.item(0)
                     (base as Element).getElementsByTagName("property").forEach { property ->
-                        println("pro:${property.nodeName}")
                         if ((property as Element).getAttribute("name") == "type") {
                             result = property.getAttribute("value")
                             return@loop
@@ -137,7 +133,7 @@ fun downloadFile(url: String, savePath: String) {
  */
 suspend fun downloadMapFileFromGroup(group: Group, path: String, maxSize: Long): DownloadResult {
     val files = group.filesRoot
-    //不使用FileUtil是因为会将其创建为文件夹
+    //不使用FileUtil是因为懒得改了 (
     val userDir = System.getProperty("user.dir")
     val map = files.resolve("$path.tmx").run { if (exists()) this else files.resolve("$path.save") }
     if (!map.exists() || map.isDirectory()) return DownloadResult.NotFound
@@ -169,10 +165,11 @@ suspend fun downloadMapFileFromGroup(group: Group, path: String, maxSize: Long):
 suspend fun downloadAnyFromGroup(group: Group, path: String, savePath: String): DownloadResult {
     val files = group.filesRoot
     val reallySavePath = if(savePath.startsWith("/")) savePath else "/$savePath"
-    return files.resolve(path).getDownloadInfo()?.run {
+    val remoteFile = files.resolve(path)
+    return remoteFile.getDownloadInfo()?.run {
         var result: DownloadResult? = null
         try {
-            downloadFile(url, reallySavePath)
+            downloadFile(url, "$reallySavePath/${remoteFile.name}")
         } catch (e: Exception) {
             e.printStackTrace()
             result = DownloadResult.DownloadFailed
@@ -180,6 +177,7 @@ suspend fun downloadAnyFromGroup(group: Group, path: String, savePath: String): 
         result ?: DownloadResult.Success
     } ?: DownloadResult.NotFound
 }
+
 
 enum class DownloadResult {
     Success, NotFound, NoDownloadInfo, DownloadFailed, OutOfMaxSize

@@ -1,27 +1,23 @@
 
-import com.github.dr.rwserver.Main
-import com.github.dr.rwserver.command.ClientCommands
-import com.github.dr.rwserver.command.LogCommands
-import com.github.dr.rwserver.command.ServerCommands
-import com.github.dr.rwserver.core.Initialization
-import com.github.dr.rwserver.core.thread.Threads
-import com.github.dr.rwserver.data.global.Data
-import com.github.dr.rwserver.data.plugin.PluginManage
-import com.github.dr.rwserver.func.StrCons
-import com.github.dr.rwserver.game.EventType
-import com.github.dr.rwserver.plugin.PluginsLoad
-import com.github.dr.rwserver.struct.Seq
-import com.github.dr.rwserver.util.file.LoadConfig
-import com.github.dr.rwserver.util.game.Events
-import com.github.dr.rwserver.util.log.Log
-import com.github.minxyzgo.rwserver.plugins.qqbot.QQBotPlugin
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.setMain
-import net.mamoe.mirai.console.command.descriptor.ExperimentalCommandDescriptors
-import net.mamoe.mirai.console.util.ConsoleExperimentalApi
-import java.util.logging.Level
-import java.util.logging.Logger
+import com.github.dr.rwserver.*
+import com.github.dr.rwserver.command.*
+import com.github.dr.rwserver.core.*
+import com.github.dr.rwserver.core.thread.*
+import com.github.dr.rwserver.data.global.*
+import com.github.dr.rwserver.data.plugin.*
+import com.github.dr.rwserver.func.*
+import com.github.dr.rwserver.game.*
+import com.github.dr.rwserver.plugin.*
+import com.github.dr.rwserver.struct.*
+import com.github.dr.rwserver.util.file.*
+import com.github.dr.rwserver.util.game.*
+import com.github.dr.rwserver.util.log.*
+import com.github.minxyzgo.rwserver.plugins.qqbot.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.test.*
+import net.mamoe.mirai.console.command.descriptor.*
+import net.mamoe.mirai.console.util.*
+import java.util.logging.*
 
 
 val info = """
@@ -68,7 +64,7 @@ fun main() {
             "Minxyzgo",
             "test test",
             ">= 1.3.0",
-            QQBotPlugin()
+            QQBotPlugin(true)
         )
     )
     PluginManage.runOnEnable()

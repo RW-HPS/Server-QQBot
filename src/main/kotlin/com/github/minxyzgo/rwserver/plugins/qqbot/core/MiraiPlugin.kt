@@ -1,30 +1,30 @@
 package com.github.minxyzgo.rwserver.plugins.qqbot.core
 
-import com.github.dr.rwserver.data.global.Data
-import com.github.dr.rwserver.data.global.NetStaticData
-import com.github.dr.rwserver.game.GameMaps
-import com.github.dr.rwserver.util.file.FileUtil
-import com.github.dr.rwserver.util.game.CommandHandler
+import com.github.dr.rwserver.data.global.*
+import com.github.dr.rwserver.func.*
+import com.github.dr.rwserver.game.*
+import com.github.dr.rwserver.util.file.*
+import com.github.dr.rwserver.util.game.*
 import com.github.dr.rwserver.util.game.CommandHandler.ResponseType.*
-import com.github.dr.rwserver.util.log.Log
-import com.github.minxyzgo.rwserver.plugins.qqbot.QQBotPlugin
+import com.github.dr.rwserver.util.log.*
+import com.github.minxyzgo.rwserver.plugins.qqbot.*
+import com.github.minxyzgo.rwserver.plugins.qqbot.data.*
 import com.github.minxyzgo.rwserver.plugins.qqbot.util.*
-import kotlinx.coroutines.launch
-import net.mamoe.mirai.console.command.descriptor.ExperimentalCommandDescriptors
-import net.mamoe.mirai.console.plugin.jvm.JvmPluginDescription
-import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
-import net.mamoe.mirai.console.util.ConsoleExperimentalApi
-import net.mamoe.mirai.contact.Contact
-import net.mamoe.mirai.contact.Group
-import net.mamoe.mirai.event.events.GroupMessageEvent
-import net.mamoe.mirai.event.events.NudgeEvent
-import net.mamoe.mirai.event.globalEventChannel
-import net.mamoe.mirai.message.data.Message
-import net.mamoe.mirai.message.data.PlainText
-import net.mamoe.mirai.message.data.content
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import net.mamoe.mirai.*
+import net.mamoe.mirai.console.command.descriptor.*
+import net.mamoe.mirai.console.plugin.jvm.*
+import net.mamoe.mirai.console.util.*
+import net.mamoe.mirai.contact.*
+import net.mamoe.mirai.event.*
+import net.mamoe.mirai.event.events.*
+import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
+import java.util.concurrent.atomic.*
 
 @ConsoleExperimentalApi
+@ExperimentalCoroutinesApi
 @ExperimentalCommandDescriptors
 object MiraiPlugin : KotlinPlugin(
     JvmPluginDescription(
@@ -34,7 +34,10 @@ object MiraiPlugin : KotlinPlugin(
         this.author("minxyzgo")
     }
 ) {
-    private val miraiCommands = object : CommandHandler(".") {
+    val counter = AtomicInteger(0)
+    var counterJob: Job? = null
+
+    internal val miraiCommands = object : CommandHandler(".") {
         init {
             val command = this
             register<GroupMessageEvent>(
@@ -63,7 +66,7 @@ object MiraiPlugin : KotlinPlugin(
             register<GroupMessageEvent>(
                 "upload",
                 "[map/all] [path...]",
-                "向服务器上传文件。可选type: map, all"
+                "向服务器上传文件。可选type: map, all。all只有群主可以使用。"
             ) { args, event ->
                 val group = event.group
                 group.launch {
@@ -71,22 +74,40 @@ object MiraiPlugin : KotlinPlugin(
                     when (val type = args[0]) {
                         "map", "all" -> {
                             when(
-                                if(type == "map") downloadMapFileFromGroup(group, path, 1000_0000)
+                                if(type == "map") downloadMapFileFromGroup(group, path, PluginData.instance.`download-max-length`)
                                 else run {
                                     if(event.sender.permission.level < 1) {
                                         group.sendMessage("你没有权限")
                                         return@launch
                                     }
 
-                                    val savePath = FileUtil.file(Data.Plugin_Data_Path + "/download/")
-                                    if(!savePath.exists()) savePath.file.mkdirs()
+                                    val savePath = FileUtil.toFolder(Data.Plugin_Data_Path + "/download/")
+                                    if(savePath.notExists()) savePath.file.mkdirs()
                                     downloadAnyFromGroup(group, path, savePath.file.path)
                                 }
                             ) {
                                 DownloadResult.Success -> {
-                                    Data.game.mapsData.clear()
-                                    Data.game.checkMaps()
-                                    group.sendMessage("重新加载地图成功!")
+                                    if(type == "map") {
+                                        val (_, amount) = PluginData.instance
+                                        if(counter.get() > amount) {
+                                            group.sendMessage("下载数量超出限制!请稍候再试。")
+                                            return@launch
+                                        }
+                                        Data.game.mapsData.clear()
+                                        Data.game.checkMaps()
+                                        group.sendMessage("重新加载地图成功!")
+                                        counter.addAndGet(1)
+                                        if(counterJob == null || counterJob?.isActive == false) {
+                                            counterJob = launch {
+                                                delay(60000)
+                                                counter.set(0)
+                                            }
+                                        }
+
+                                        println("counter: ${counter.get()} amount: $amount")
+                                    } else {
+                                        group.sendMessage("下载成功!")
+                                    }
                                 }
 
                                 DownloadResult.OutOfMaxSize -> group.sendMessage("下载失败: 大小超出限制")
@@ -97,6 +118,81 @@ object MiraiPlugin : KotlinPlugin(
                         }
 
                         else -> group.sendMessage("无效的type参数")
+                    }
+                }
+            }
+
+            register<GroupMessageEvent>(
+                "removeMap",
+                "[path...]",
+                "删除一张服务器内的地图。只有管理员和群主可以使用。"
+            ) { args, event ->
+                val path = args.joinToString(" ")
+                val group = event.group
+                group.launch {
+                    val util = FileUtil.toFolder(Data.Plugin_Maps_Path)
+                    if(event.sender.permission.level < 1) {
+                        group.sendMessage("你没有权限。")
+                        return@launch
+                    }
+                    val tmx = util.toPath("$path.tmx").file
+                    if(tmx.exists()) {
+                        println(tmx.delete())
+                        util.toPath("${path}_map.png").file.run { if(exists()) delete() }
+                        Data.game.mapsData.clear()
+                        Data.game.checkMaps()
+                        group.sendMessage("删除地图成功!")
+                    } else {
+                        group.sendMessage("没有这张地图。")
+                    }
+                }
+            }
+
+            register<GroupMessageEvent>(
+                "command",
+                "[command...]",
+                "直接执行server指令。只有群主可以使用。"
+            ) { args, event ->
+                val group = event.group
+                group.launch {
+                    if(event.sender.permission != MemberPermission.OWNER) {
+                        group.sendMessage("你没有权限。")
+                        return@launch
+                    }
+
+                    var response: CommandResponse? = null
+                    val flow: Flow<String> = channelFlow<String> {
+                        response = Data.SERVERCOMMAND.handleMessage(args.joinToString(" "), StrCons {
+                            launch { this@channelFlow.send(it) }
+                        })
+                    }.flowOn(Dispatchers.Default)
+
+
+                    buildString {
+                        flow.collect {
+                            append("$it\n")
+                        }
+                    }.also {
+                        if(it.isNotEmpty()) group.sendMessage(it)
+                    }
+
+
+                    response!!.run {
+                        when (this.type) {
+                            manyArguments -> group.sendMessage(
+                                "Too many arguments. Usage: ${this.command.text} ${this.command.paramText}"
+                            )
+
+                            fewArguments -> group.sendMessage(
+                                "Too few arguments. Usage: ${this.command.text} ${this.command.paramText}"
+                            )
+
+                            unknownCommand, noCommand -> group.sendMessage(
+                                "Unknown command. Check .help"
+                            )
+
+                            else -> { println("send command successfully or get unknown error") }
+                        }
                     }
                 }
             }
@@ -114,7 +210,7 @@ object MiraiPlugin : KotlinPlugin(
         }
 
         globalEventChannel().subscribeAlways<NudgeEvent> {
-            this.subject.run { if(this is Group) sendStatus() }
+            this.subject.run { if(!(Bot.instances.none { target.id == it.id }) && this is Group) sendStatus() }
         }
     }
 
@@ -125,7 +221,7 @@ object MiraiPlugin : KotlinPlugin(
 
             val image = if(currentMap.mapType == GameMaps.MapType.defaultMap)
                 this::class.java.classLoader.getResourceAsStream("${currentMap.mapPlayer}${currentMap.mapName}_map.png")!!.uploadAsImage(contact)
-            else getMapFileInputStreamBySuffix(currentMap.mapData.mapFileName, "_map.png")?.uploadAsImage(contact)
+            else getMapFileInputStreamBySuffix(currentMap.mapData!!.mapFileName, "_map.png")?.uploadAsImage(contact)
 
             val time = operationTime()
             val hours = time / 3600000
@@ -138,8 +234,8 @@ object MiraiPlugin : KotlinPlugin(
                     if(currentMap.mapType == GameMaps.MapType.defaultMap) 
                         "skirmish" 
                     else getMapFileInputStreamBySuffix(
-                        currentMap.mapData.mapFileName, 
-                        currentMap.mapData.type
+                        currentMap.mapData!!.mapFileName, 
+                        currentMap.mapData!!.type
                     )?.let { 
                         parseMapType(
                             it
@@ -148,8 +244,8 @@ object MiraiPlugin : KotlinPlugin(
                 }
                 地图人数: ${currentMap.mapPlayer}
                 地图类型: ${currentMap.mapType.name}
-                服务器人数: ${Data.game.playerData.filterNotNull().size}/${com.github.dr.rwserver.data.global.Data.game.maxPlayer}
-                服务器状态: ${if (Data.game.isStartGame) "已开始" else "战役室"}
+                服务器人数: ${Data.game.playerData.filterNotNull().size}/${Data.game.maxPlayer}
+                服务器状态: ${if (Data.game.isStartGame) "游戏中" else "战役室"}
                 服务器版本: ${Data.SERVER_CORE_VERSION}
                 已BAN人数: ${Data.core.admin.bannedIPs.size()}
                 协议版本: ${NetStaticData.protocolData.AbstractNetConnectVersion}
